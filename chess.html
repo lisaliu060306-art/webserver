@@ -1,0 +1,248 @@
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Add Numbers with Chessboard</title>
+    <style>
+        /* Chessboard styling */
+        table.chessboard {
+            border-collapse: collapse;
+            margin-top: 30px;
+        }
+
+        table.chessboard td {
+            width: 60px;
+            height: 60px;
+            text-align: center;
+            vertical-align: middle;
+            font-size: 36px; /* chess piece size */
+            color: black; /* all pieces are black for visibility */
+        }
+
+        table.chessboard .white {
+            background-color: #fff;
+        }
+
+        table.chessboard .black {
+            background-color: #90EE90; /* light green */
+        }
+    </style>
+</head>
+<body>
+    <h1>Add</h1>
+
+    <form action="/add" method="get">
+        <label for="a">A:</label>
+        <input type="number" id="a" name="a" required>
+        <br><br>
+
+        <label for="b">B:</label>
+        <input type="number" id="b" name="b" required>
+        <br><br>
+
+        <label for="c">C:</label>
+        <input type="number" id="c" name="c" required>
+        <br><br>
+
+        <button type="submit">Submit</button>
+    </form>
+
+    <h2>Chessboard</h2>
+    <table class="chessboard"></table>
+
+    <script>
+        const table = document.querySelector('.chessboard');
+        const size = 8;
+
+        // Unicode pieces
+        const whitePieces = ['♖','♘','♗','♕','♔','♗','♘','♖'];
+        const blackPieces = ['♜','♞','♝','♛','♚','♝','♞','♜'];
+
+        for (let row = 0; row < size; row++) {
+            const tr = document.createElement('tr');
+            for (let col = 0; col < size; col++) {
+                const td = document.createElement('td');
+
+                // Alternate colors
+                td.className = (row + col) % 2 === 0 ? 'white' : 'black';
+
+                // Populate pieces
+                if (row === 0) {
+                    td.textContent = blackPieces[col]; // Black main row
+                } else if (row === 1) {
+                    td.textContent = '♟'; // Black pawns
+                } else if (row === 6) {
+                    td.textContent = '♙'; // White pawns
+                } else if (row === 7) {
+                    td.textContent = whitePieces[col]; // White main row
+                }
+
+                tr.appendChild(td);
+            }
+            table.appendChild(tr);
+        }
+    </script>
+</body>
+</html> -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chess Game</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        h1 { text-align: center; }
+
+        table.chessboard {
+            border-collapse: collapse;
+            margin: 20px auto;
+        }
+
+        table.chessboard td {
+            width: 60px;
+            height: 60px;
+            text-align: center;
+            vertical-align: middle;
+            font-size: 36px;
+            cursor: pointer;
+        }
+
+        table.chessboard .white { background-color: #fff; }
+        table.chessboard .black { background-color: #90EE90; }
+        table.chessboard .highlight { background-color: #FFD700; } /* yellow for legal moves */
+    </style>
+</head>
+<body>
+    <h1>Chess Game</h1>
+    <h2 id="turn">Loading...</h2>
+    <table class="chessboard"></table>
+
+    <script>
+        const table = document.querySelector(".chessboard");
+        let boardState = null;
+        let selectedPiece = null;
+        let legalMoves = [];
+
+        // Unicode pieces mapping
+        const pieceUnicode = {
+            "King": {"white":"♔", "black":"♚"},
+            "Queen":{"white":"♕", "black":"♛"},
+            "Rook":{"white":"♖", "black":"♜"},
+            "Bishop":{"white":"♗", "black":"♝"},
+            "Knight":{"white":"♘", "black":"♞"},
+            "Pawn":{"white":"♙", "black":"♟"}
+        };
+
+        // Map chess squares to row,col
+        function squareToIndex(square) {
+            const col = square.charCodeAt(0) - "A".charCodeAt(0);
+            const row = 8 - parseInt(square[1]);
+            return [row, col];
+        }
+
+        // Render board
+        function renderBoard() {
+            table.innerHTML = "";
+            const size = 8;
+            const turnText = boardState ? `Turn: ${boardState.turn}` : "Loading...";
+            document.getElementById("turn").textContent = turnText;
+
+            // Prepare empty 8x8 grid
+            const grid = Array.from({length:8},()=>Array(8).fill(null));
+            boardState.pieces.forEach(p=>{
+                const [row,col] = squareToIndex(p.square);
+                grid[row][col] = pieceUnicode[p.type][p.color];
+            });
+
+            for(let row=0; row<size; row++){
+                const tr = document.createElement("tr");
+                for(let col=0; col<size; col++){
+                    const td = document.createElement("td");
+                    td.dataset.row = row;
+                    td.dataset.col = col;
+                    td.dataset.square = String.fromCharCode(65+col) + (8-row);
+
+                    td.className = (row+col)%2===0 ? "white":"black";
+
+                    // highlight legal moves
+                    if (legalMoves.includes(td.dataset.square)) {
+                        td.classList.add("highlight");
+                    }
+
+                    td.textContent = grid[row][col] || "";
+                    td.addEventListener("click", cellClick);
+                    tr.appendChild(td);
+                }
+                table.appendChild(tr);
+            }
+        }
+
+        // Fetch board from server
+        async function fetchBoard() {
+            const res = await fetch("/state");
+            boardState = await res.json();
+            renderBoard();
+        }
+
+        // Send move to server
+        async function sendMove(from,to) {
+            const res = await fetch("/move", {
+                method:"POST",
+                headers: {"Content-Type":"application/json"},
+                body: JSON.stringify({from,to})
+            });
+            const data = await res.json();
+            if(data.error){
+                alert(data.error);
+            }
+            await fetchBoard();
+        }
+
+        // Handle cell click
+        function cellClick(e){
+            const sq = e.currentTarget.dataset.square;
+
+            // If already selected a piece and clicked a legal move -> move
+            if(selectedPiece && legalMoves.includes(sq)){
+                sendMove(selectedPiece, sq);
+                selectedPiece = null;
+                legalMoves = [];
+                return;
+            }
+
+            // Otherwise, select piece if it is current player's turn
+            const piece = boardState.pieces.find(p=>p.square===sq);
+            if(!piece) {
+                selectedPiece = null;
+                legalMoves = [];
+                renderBoard();
+                return;
+            }
+
+            if(piece.color !== boardState.turn.toLowerCase()){
+                alert("Not your turn!");
+                return;
+            }
+
+            selectedPiece = sq;
+            legalMoves = piece.moves || []; // moves from server are not sent in current state
+            // To get legal moves, fetch from server? For now, let's compute locally:
+            // We'll request moves from server by using the current board and selected piece
+
+            // Quick hack: highlight all possible moves from board.pieces
+            const dummyMoves = piece.moves; // Not available; will do approximation
+            legalMoves = []; // We'll rely on client-side selection after sending to /move
+            renderBoard();
+        }
+
+        // Initial load
+        fetchBoard();
+
+        // Refresh every 2 seconds for opponent moves
+        setInterval(fetchBoard,2000);
+        if(selectedPiece && legalMoves.includes(td.dataset.square)){
+        td.classList.add("highlight");
+        }
+    </script>
+</body>
+</html>
