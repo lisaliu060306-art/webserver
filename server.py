@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, request, render_template
 from chess import Board, Color, find_piece_in_pos, other_color
-
+#x = 2
 app = Flask(__name__)
 
 board = Board()
